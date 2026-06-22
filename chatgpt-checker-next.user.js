@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Checker Next
-// @namespace    https://github.com/zetaloop/chatgpt-checker-next
-// @homepage     https://github.com/zetaloop/chatgpt-checker-next
+// @namespace    https://github.com/xJogger/chatgpt-checker-next
+// @homepage     https://github.com/xJogger/chatgpt-checker-next
 // @author       zetaloop
 // @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHBhdGggZmlsbD0iIzJjM2U1MCIgZD0iTTMyIDJDMTUuNDMyIDIgMiAxNS40MzIgMiAzMnMxMy40MzIgMzAgMzAgMzAgMzAtMTMuNDMyIDMwLTMwUzQ4LjU2OCAyIDMyIDJ6bTAgNTRjLTEzLjIzMyAwLTI0LTEwLjc2Ny0yNC0yNFMxOC43NjcgOCAzMiA4czI0IDEwLjc2NyAyNCAyNFM0NS4yMzMgNTYgMzIgNTZ6Ii8+PHBhdGggZmlsbD0iIzNkYzJmZiIgZD0iTTMyIDEyYy0xMS4wNDYgMC0yMCA4Ljk1NC0yMCAyMHM4Ljk1NCAyMCAyMCAyMCAyMC04Ljk1NCAyMC0yMFM0My4wNDYgMTIgMzIgMTJ6bTAgMzZjLTguODM3IDAtMTYtNy4xNjMtMTYtMTZzNy4xNjMtMTYgMTYtMTYgMTYgNy4xNjMgMTYgMTZTNDAuODM3IDQ4IDMyIDQ4eiIvPjxwYXRoIGZpbGw9IiMwMGZmN2YiIGQ9Ik0zMiAyMGMtNi42MjcgMC0xMiA1LjM3My0xMiAxMnM1LjM3MyAxMiAxMiAxMiAxMi01LjM3MyAxMi0xMlMzOC42MjcgMjAgMzIgMjB6bTAgMjBjLTQuNDE4IDAtOC0zLjU4Mi04LThzMy41ODItOCA4LTggOCAzLjU4MiA4IDgtMy41ODIgOC04IDh6Ii8+PGNpcmNsZSBmaWxsPSIjZmZmIiBjeD0iMzIiIGN5PSIzMiIgcj0iNCIvPjwvc3ZnPg==
 // @version      3.3.0
@@ -11,8 +11,8 @@
 // @match        *://grok.com/*
 // @grant        none
 // @run-at       document-start
-// @downloadURL  https://github.com/zetaloop/chatgpt-checker-next/raw/refs/heads/main/chatgpt-checker-next.user.js
-// @updateURL    https://github.com/zetaloop/chatgpt-checker-next/raw/refs/heads/main/chatgpt-checker-next.user.js
+// @downloadURL  https://github.com/xJogger/chatgpt-checker-next/raw/refs/heads/main/chatgpt-checker-next.user.js
+// @updateURL    https://github.com/xJogger/chatgpt-checker-next/raw/refs/heads/main/chatgpt-checker-next.user.js
 // @license AGPLv3
 // ==/UserScript==
 
@@ -818,7 +818,8 @@
             <div id="codex-progress-bg-week" style="margin-top: 4px; margin-bottom: 4px; width: 100%; height: 8px; background: #555; border-radius: 4px;">
                 <div id="codex-progress-bar-week" style="height: 100%; width: 0%; background: #C26FFD; border-radius: 4px;"></div>
             </div>
-            重置时间：<span id="codex-reset-time-week">...</span>
+            重置时间：<span id="codex-reset-time-week">...</span><br>
+            差值：<span id="codex-usage-week-diff">...</span>
             <div id="codex-review-container" style="margin-top: 8px; display: none;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-right:4px;">
                     <span>已用：<span id="codex-usage-review">...</span></span>
@@ -1464,7 +1465,7 @@
             text-align: center;
             letter-spacing: 0.3px;
         ">
-            <a href="https://github.com/zetaloop/chatgpt-checker-next" target="_blank" style="color: inherit; text-decoration: none;">ChatGPT Checker Next</a>${scriptVersion ? ` <a href="https://github.com/zetaloop/chatgpt-checker-next/raw/refs/heads/main/chatgpt-checker-next.user.js" target="_blank" style="color: inherit; text-decoration: none;">v${scriptVersion}</a>` : ""}
+            <a href="https://github.com/xJogger/chatgpt-checker-next" target="_blank" style="color: inherit; text-decoration: none;">ChatGPT Checker Next</a>${scriptVersion ? ` <a href="https://github.com/xJogger/chatgpt-checker-next/raw/refs/heads/main/chatgpt-checker-next.user.js" target="_blank" style="color: inherit; text-decoration: none;">v${scriptVersion}</a>` : ""}
     </div>`;
         displayBox.appendChild(contentWrapper);
         document.body.appendChild(displayBox);
@@ -2952,6 +2953,54 @@
         return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     }
 
+    function formatCodexSignedPercent(value) {
+        if (typeof value !== "number" || !Number.isFinite(value)) return "...";
+        const rounded = Math.round(value * 10) / 10;
+        const normalized = Object.is(rounded, -0) ? 0 : rounded;
+        const sign = normalized > 0 ? "+" : "";
+        return `${sign}${normalized.toFixed(1)}%`;
+    }
+
+    function updateCodexWeeklyUsageDiff() {
+        const diffEl = document.getElementById("codex-usage-week-diff");
+        if (!diffEl) return;
+
+        const limitSecs = codexLimitWindowSecondsSecondary;
+        const isNotStarted = isCodexTimerNotStarted(
+            limitSecs,
+            codexResetsAfterSecondary,
+        );
+        const remainingSecs =
+            codexResetTimeSecondary != null
+                ? Math.max(
+                      0,
+                      (codexResetTimeSecondary - Date.now()) / 1000,
+                  )
+                : codexResetsAfterSecondary;
+
+        if (
+            codexUsedPercentSecondary == null ||
+            typeof limitSecs !== "number" ||
+            !Number.isFinite(limitSecs) ||
+            limitSecs <= 0 ||
+            typeof remainingSecs !== "number" ||
+            !Number.isFinite(remainingSecs) ||
+            isNotStarted
+        ) {
+            diffEl.innerText = "...";
+            diffEl.removeAttribute("title");
+            return;
+        }
+
+        const theoreticalUsedPercent = Math.max(
+            0,
+            Math.min(100, (1 - remainingSecs / limitSecs) * 100),
+        );
+        const diffPercent = codexUsedPercentSecondary - theoreticalUsedPercent;
+        diffEl.innerText = formatCodexSignedPercent(diffPercent);
+        diffEl.title = `实际已用 ${codexUsedPercentSecondary.toFixed(1)}%，理论已用 ${theoreticalUsedPercent.toFixed(1)}%`;
+    }
+
     function updateCodexCountdown() {
         const resetP = document.getElementById("codex-reset-time");
         const resetS = document.getElementById("codex-reset-time-week");
@@ -3076,6 +3125,7 @@
         } else {
             resetR.removeAttribute("title");
         }
+        updateCodexWeeklyUsageDiff();
     }
     setInterval(updateCodexCountdown, 1000);
 
